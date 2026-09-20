@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>核查数据管理</title>
+  <link rel="stylesheet" href="css/app.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header" id="app-header"></header>
+    <div class="app-body">
+      <aside class="app-sidebar">
+        <nav class="sidebar-menu" id="sidebar-menu"></nav>
+      </aside>
+      <main class="app-main">
+        <div class="verify-page-head">
+          <div class="breadcrumb" id="breadcrumb"></div>
+          <button type="button" class="verify-demo-reset" id="btn-demo-reset" title="将核查原型数据恢复为初始状态，便于重新演示">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M3 12a9 9 0 1 0 3-6.7"/>
+              <path d="M3 4v5h5"/>
+            </svg>
+            重置
+          </button>
+        </div>
+        <div class="content-area verify-page">
+          <!-- 初始页 -->
+          <div id="view-landing" class="verify-view">
+            <div class="verify-toolbar">
+              <div class="verify-product-tabs">
+                <button type="button" class="verify-product-tab active" data-product="炼钢-粗钢">炼钢-粗钢</button>
+              </div>
+              <div class="verify-toolbar-right">
+                <div class="verify-field">
+                  <span class="verify-field-label">年份</span>
+                  <div class="verify-year-box">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                      <rect x="3" y="5" width="18" height="16" rx="2"/>
+                      <path d="M3 10h18M8 3v4M16 3v4"/>
+                    </svg>
+                    <select id="verify-year">
+                      <option value="2024">2024</option>
+                      <option value="2025" selected>2025</option>
+                      <option value="2026">2026</option>
+                      <option value="2027">2027</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="verify-field">
+                  <span class="verify-field-label">标准</span>
+                  <select id="verify-standard" class="verify-standard-select">
+                    <option value="national-steel" selected>全国-钢铁企业温室气体核算方法与报告指南</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div class="verify-hero">
+              <div class="verify-hero-main">
+                <span class="verify-status-badge" id="verify-status-badge">待上报</span>
+                <h2 class="verify-hero-title" id="verify-conclusion-title">2025年核查结论</h2>
+                <div class="verify-hero-actions" id="verify-hero-actions">
+                  <button type="button" class="btn verify-upload-btn" id="btn-upload-data">上传数据</button>
+                </div>
+              </div>
+              <div class="verify-hero-art" aria-hidden="true">
+                <div class="verify-art-orb verify-art-orb-a"></div>
+                <div class="verify-art-orb verify-art-orb-b"></div>
+                <div class="verify-art-ribbon"></div>
+                <div class="verify-art-ring"></div>
+                <div class="verify-art-triangle"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 数据页签界面 -->
+          <div id="view-detail" class="verify-view" hidden>
+            <div class="verify-detail-head">
+              <button type="button" class="verify-back-btn" id="btn-detail-back-icon"
+                title="返回主界面" aria-label="返回主界面">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M19 12H5"/>
+                  <path d="M12 19l-7-7 7-7"/>
+                </svg>
+              </button>
+              <div class="verify-sheet-tabs" id="verify-sheet-tabs"></div>
+              <button type="button" class="btn btn-primary verify-threshold-btn" id="btn-threshold">
+                差异阈值设置
+              </button>
+            </div>
+            <div class="verify-detail-body" id="verify-detail-body"></div>
+            <div class="verify-detail-footer" id="verify-detail-footer">
+              <button type="button" class="btn btn-lg" id="btn-save">保存</button>
+              <button type="button" class="btn btn-primary btn-lg" id="btn-submit">提交</button>
+            </div>
+          </div>
+
+          <!-- 督导详情 -->
+          <div id="view-supervise" class="verify-view" hidden>
+            <div class="verify-flow-card">
+              <div class="verify-flow-title">督导详情</div>
+              <p class="verify-flow-desc">
+                差异超过阈值的项目需开展督导：开始督导后维护差异分析说明、整改措施与整改结果，完成后点击督导闭环回写闭环时间。
+              </p>
+              <div class="verify-flow-meta" id="supervise-meta"></div>
+              <div class="verify-table-wrap verify-flow-table-wrap">
+                <table class="verify-data-table verify-supervise-table">
+                  <thead>
+                    <tr>
+                      <th>所属表</th>
+                      <th>指标项</th>
+                      <th>全年核算</th>
+                      <th>核查数据</th>
+                      <th>差异率</th>
+                      <th>差异分析说明</th>
+                      <th>整改措施</th>
+                      <th>整改结果</th>
+                      <th>开始时间</th>
+                      <th>闭环时间</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="supervise-tbody"></tbody>
+                </table>
+              </div>
+              <div class="verify-detail-footer">
+                <button type="button" class="btn btn-lg" id="btn-supervise-home">返回首页</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- 差异阈值设置弹窗 -->
+  <div class="modal-overlay" id="threshold-modal">
+    <div class="modal verify-threshold-modal">
+      <div class="modal-header">
+        <span>差异阈值设置</span>
+        <button type="button" class="modal-close" id="btn-threshold-close">×</button>
+      </div>
+      <div class="modal-body">
+        <p class="verify-threshold-tip">当 |核查数据 − 全年核算| ÷ |全年核算| 超过该阈值时，差异情况列显示感叹号提醒，并纳入督导详情列表。</p>
+        <div class="verify-threshold-field">
+          <label for="threshold-input">差异阈值</label>
+          <div class="verify-threshold-input-wrap">
+            <input id="threshold-input" type="number" min="0" max="100" step="0.1" value="10" />
+            <span>%</span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn" id="btn-threshold-cancel">取消</button>
+        <button type="button" class="btn btn-primary" id="btn-threshold-ok">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+  <script src="js/verify-data.js"></script>
+  <script src="js/verify.js"></script>
+</body>
+</html>

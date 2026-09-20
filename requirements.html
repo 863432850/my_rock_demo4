@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>需求说明/注意事项</title>
+  <link rel="stylesheet" href="css/app.css" />
+</head>
+<body class="doc-page">
+  <div class="app-shell">
+    <header class="app-header" id="app-header"></header>
+    <div class="app-body">
+      <aside class="app-sidebar">
+        <nav class="sidebar-menu" id="sidebar-menu"></nav>
+      </aside>
+      <main class="app-main">
+        <div class="breadcrumb" id="breadcrumb"></div>
+        <div class="content-area requirements-page">
+          <div class="doc-toolbar">
+            <div class="doc-toolbar-left">
+              <label class="btn btn-primary upload-label">
+                上传文件
+                <input type="file" id="req-upload"
+                  accept=".pdf,.docx,.xlsx,.xls,.md,.markdown,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/markdown"
+                  hidden />
+              </label>
+              <span class="doc-file-name" id="req-file-name">未选择文件</span>
+              <span class="doc-save-hint" id="req-save-hint"></span>
+              <span class="docs-server-badge warn" id="docs-server-badge">检测写入服务…</span>
+            </div>
+            <div class="doc-toolbar-right">
+              <button type="button" class="btn btn-delete" id="btn-req-delete" disabled>删除</button>
+              <button type="button" class="btn btn-primary" id="btn-req-save">保存到代码包</button>
+            </div>
+          </div>
+          <div class="flow-preview-wrap" id="req-preview">
+            <div class="flow-empty">
+              <div class="flow-empty-icon">📄</div>
+              <p>请上传需求说明文件</p>
+              <p class="flow-empty-sub">支持 pdf、word（docx）、excel（xlsx / xls）、markdown（md），建议不超过 20MB；保存后写入代码包，提交 GitHub 后他人可见</p>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+  <script src="vendor/marked.min.js"></script>
+  <script src="vendor/mammoth.browser.min.js"></script>
+  <script src="vendor/xlsx.full.min.js"></script>
+  <!--
+    需求说明与流程图一样，是两个模块共用的一页：
+    先按 ?module= 加载该模块的 doc-defaults.js，再加载页面脚本。
+  -->
+  <script>loadModuleDocDefaults('js/requirements.js');</script>
+</body>
+</html>

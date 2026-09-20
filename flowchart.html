@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>整体流程图</title>
+  <link rel="stylesheet" href="css/app.css" />
+</head>
+<body class="doc-page">
+  <div class="app-shell">
+    <header class="app-header" id="app-header"></header>
+    <div class="app-body">
+      <aside class="app-sidebar">
+        <nav class="sidebar-menu" id="sidebar-menu"></nav>
+      </aside>
+      <main class="app-main">
+        <div class="breadcrumb" id="breadcrumb"></div>
+        <div class="content-area flowchart-page">
+          <div class="doc-toolbar">
+            <div class="doc-toolbar-left">
+              <label class="btn btn-primary upload-label">
+                上传图片/PDF
+                <input type="file" id="flow-upload" accept="image/*,.pdf,application/pdf" hidden />
+              </label>
+              <span class="doc-file-name" id="flow-file-name">未选择文件</span>
+              <span class="doc-save-hint" id="flow-save-hint"></span>
+              <span class="docs-server-badge warn" id="docs-server-badge">检测写入服务…</span>
+            </div>
+            <div class="doc-toolbar-right">
+              <button type="button" class="btn btn-delete" id="btn-flow-delete" disabled>删除</button>
+              <button type="button" class="btn btn-primary" id="btn-flow-save">保存到代码包</button>
+            </div>
+          </div>
+          <div class="flow-preview-wrap" id="flow-preview">
+            <div class="flow-empty">
+              <div class="flow-empty-icon">📋</div>
+              <p>请上传流程图图片或 PDF 文件</p>
+              <p class="flow-empty-sub">支持 jpg、png、gif、webp、pdf，建议不超过 5MB</p>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+  <!--
+    流程图是两个模块（碳排放管理 / 碳核查管理）共用的一页：
+    先按 ?module= 加载该模块的 doc-defaults.js，再加载页面脚本。
+    在 html 里写死 <script src="js/doc-defaults.js"> 不行 —— 模块参数要运行时才知道。
+  -->
+  <script>loadModuleDocDefaults('js/flowchart.js');</script>
+</body>
+</html>

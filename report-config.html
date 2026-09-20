@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>填报项配置 · 碳排放管理</title>
+  <link rel="stylesheet" href="css/app.css" />
+</head>
+<!--
+  填报项配置页（从数据填报页右上角「填报项配置」进入）
+  全屏页面，与 month-report.html 一样不套平台顶栏与左侧菜单，共用 .report-topbar 这套子页外壳。
+
+  三步配置：
+    1 报送生产线信息（多选）
+    2 行业填报标签（多选）—— 选中的标签会在第 3 步各生成一个配置区
+    3 物料与参数配置 —— 每个标签下可加物料，每个物料下可加参数（名称/单位/保留小数）
+-->
+<body class="config-page">
+  <header class="report-topbar">
+    <a class="report-back" id="rc-back" href="month-report.html" title="返回">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+    </a>
+    <h1 class="report-title">填报项配置</h1>
+  </header>
+
+  <div class="config-body">
+
+    <section class="rc-card">
+      <div class="rc-card-head">
+        <span class="rc-step">1</span>
+        <h2>报送生产线信息</h2>
+        <span class="rc-hint">可多选</span>
+      </div>
+      <div class="rc-card-body">
+        <div class="ms" id="rc-lines"></div>
+      </div>
+    </section>
+
+    <section class="rc-card">
+      <div class="rc-card-head">
+        <span class="rc-step">2</span>
+        <h2>行业填报标签</h2>
+        <span class="rc-hint">可多选，选中的标签会在下方「物料与参数配置」中各生成一个配置区</span>
+      </div>
+      <div class="rc-card-body">
+        <div class="ms" id="rc-tags"></div>
+      </div>
+    </section>
+
+    <section class="rc-card">
+      <div class="rc-card-head">
+        <span class="rc-step">3</span>
+        <h2>物料与参数配置</h2>
+        <span class="rc-hint">为每个标签添加物料，并完善该物料下各参数的名称与单位</span>
+      </div>
+      <div class="rc-card-body">
+        <div class="rc-blocks" id="rc-blocks"></div>
+      </div>
+    </section>
+
+  </div>
+
+  <footer class="report-footbar">
+    <button type="button" class="btn" id="rc-cancel">取消</button>
+    <button type="button" class="btn btn-primary" id="rc-save">保存配置</button>
+  </footer>
+
+  <script src="js/app.js"></script>
+  <script src="js/report-config-store.js"></script>
+  <script src="js/report-config.js"></script>
+</body>
+</html>
