@@ -181,6 +181,22 @@ button, input, select, textarea { font-family: inherit; }
   font-weight: 500;
 }
 
+/* 封存项：渲染成 <span>（不可点），灰字 + 禁止光标，悬停也不变色 */
+.sidebar-item.is-disabled,
+.sidebar-item.is-disabled:hover {
+  color: var(--text-muted);
+  background: transparent;
+  cursor: not-allowed;
+}
+
+/* 封存项恰好是当前页时（直接开 URL 进来）仍给个浅底，让人知道自己在哪 */
+.sidebar-item.is-disabled.active,
+.sidebar-item.is-disabled.active:hover {
+  background: #f5f7fa;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
 .app-main {
   flex: 1;
   min-width: 0;
@@ -4646,4 +4662,189 @@ tr.row-no-target .node-toggle.empty { color: #c0c4cc; }
     right: 2%;
     opacity: 0.75;
   }
+}
+
+/* ============================================================
+ * 手工数据填报v2（manual-entry-v2.html）
+ * ------------------------------------------------------------
+ * 与 v1 的月卡看板是两条独立的线，所以样式也各自一套，只用 .mv2- 前缀，
+ * 通用件（.filter-bar / .section-card / .btn / .table-wrap / .data-table / .modal-* / .rc-link）
+ * 全部复用现有定义，这里只补它没有的：面板头 + 右上角操作区 + 表格列宽 + 弹窗表单 + 空态。
+ * ============================================================ */
+.mv2-card { padding: 16px 18px 18px; }
+
+.mv2-card-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+/* 右上角三个操作按钮（无面板标题，整行靠右） */
+.mv2-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+/* 不设 max-height：外层 .content-area 自己会滚，
+   再套一层内滚动会变成「双层滚动条」，还会把行数少的列表**截断**（看不到最后几行）。 */
+.mv2-table-wrap { overflow-x: auto; overflow-y: visible; }
+
+.mv2-table thead th { white-space: nowrap; }
+.mv2-table tbody td { white-space: nowrap; }
+
+.mv2-table td.is-num { font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+
+/* 填报值：加粗 + 等宽数字，和列表里其他文本列区分开 */
+.mv2-table td.mv2-value {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.mv2-col-year { width: 72px; }
+.mv2-col-month { width: 72px; }
+.mv2-col-line { width: 150px; }
+.mv2-col-tag { width: 120px; }
+.mv2-col-mat { width: 110px; }
+.mv2-col-param { width: 120px; }
+.mv2-col-unit { width: 72px; }
+.mv2-col-value { width: 110px; }
+.mv2-col-act { width: 120px; }
+
+/* 物料名称下拉要比年份 / 月份宽一点（名字 3~4 个字 + 「全部」） */
+.mv2-material-select { min-width: 120px; }
+
+/* 操作列：两个文字链接，间距小一点，别占太宽 */
+.mv2-act {
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.mv2-act .rc-link { font-size: 13px; padding: 0; }
+
+.mv2-empty {
+  padding: 44px 14px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* --- 翻页条（列表底部） --- */
+/* 放表格外面：`.mv2-table-wrap` 是 overflow-x:auto，塞进去会跟着横向滚走 */
+.mv2-pager {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.mv2-page-total {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.mv2-page-size {
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+  cursor: pointer;
+}
+
+.mv2-page-size:focus { border-color: var(--primary); }
+
+.mv2-page-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.mv2-page-btn {
+  min-width: 30px;
+  height: 30px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.mv2-page-btn:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+
+.mv2-page-btn.is-active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+  font-weight: 500;
+}
+
+.mv2-page-btn:disabled {
+  color: #c4c8ce;
+  cursor: not-allowed;
+}
+
+.mv2-page-gap {
+  min-width: 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* --- 弹窗表单（编辑 / 期初库存时间配置 共用） --- */
+.mv2-modal { width: 460px; }
+
+.mv2-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mv2-field {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.mv2-field > label {
+  width: 104px;
+  flex-shrink: 0;
+  text-align: right;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.mv2-field > select,
+.mv2-field > input {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.mv2-field > select:focus,
+.mv2-field > input:focus { border-color: var(--primary); }
+
+@media (max-width: 1100px) {
+  .mv2-head-actions { margin-left: 0; }
 }

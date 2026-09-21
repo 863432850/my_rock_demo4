@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>手工数据填报v2 · 碳排放管理</title>
+  <link rel="stylesheet" href="css/app.css" />
+</head>
+<!--
+  手工数据填报v2（碳排放管理 > 业务界面 > 手工数据填报v2）
+  与 v1（manual-entry.html 的 12 个月卡看板 + 填报页）是**两条独立的线**，互不影响：
+    v1 = 月度存证视角（哪个月没填 → 进去按「主体 × 页签」填一张表）
+    v2 = 数据台账视角（一行一个参数项，带查询 / 编辑 / 删除 / 模版下载 / 导入）
+
+  数据落在自己的 localStorage 键里（见 js/manual-entry-v2.js 的 MV2_ROW_KEY），
+  读的仍然是同一份「填报项配置」，所以物料与参数口径和 v1 一致。
+-->
+<body>
+  <div class="app-shell">
+    <header class="app-header" id="app-header"></header>
+    <div class="app-body">
+      <aside class="app-sidebar">
+        <nav class="sidebar-menu" id="sidebar-menu"></nav>
+      </aside>
+      <main class="app-main">
+        <div class="breadcrumb" id="breadcrumb"></div>
+        <div class="content-area">
+
+          <!-- 查询条件：年份 / 月份 / 物料名称。三者都是可清空的，留空 = 不按该条件过滤 -->
+          <div class="filter-bar">
+            <div class="filter-left">
+              <div class="filter-item">
+                <label for="mv2-year">年份</label>
+                <select id="mv2-year" class="year-select"></select>
+              </div>
+              <div class="filter-item">
+                <label for="mv2-month">月份</label>
+                <select id="mv2-month" class="year-select"></select>
+              </div>
+              <div class="filter-item">
+                <label for="mv2-material">物料名称</label>
+                <select id="mv2-material" class="year-select mv2-material-select"></select>
+              </div>
+              <div class="filter-actions">
+                <button type="button" class="btn btn-primary" id="mv2-search">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3-3"/></svg>
+                  查询
+                </button>
+                <button type="button" class="btn" id="mv2-reset">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+                  重置
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 数据列表 -->
+          <div class="section-card mv2-card">
+            <div class="mv2-card-head">
+              <div class="mv2-head-actions">
+                <button type="button" class="btn btn-primary" id="mv2-opening-time">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>
+                  </svg>
+                  期初库存时间配置
+                </button>
+                <button type="button" class="btn btn-primary" id="mv2-export">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 20h16"/>
+                  </svg>
+                  模版下载
+                </button>
+                <button type="button" class="btn btn-primary" id="mv2-import">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 20h16"/>
+                  </svg>
+                  导入
+                </button>
+              </div>
+            </div>
+
+            <div class="table-wrap mv2-table-wrap">
+              <table class="data-table mv2-table">
+                <thead>
+                  <tr>
+                    <th class="mv2-col-year">年份</th>
+                    <th class="mv2-col-month">月份</th>
+                    <th class="mv2-col-line">报送生产线信息</th>
+                    <th class="mv2-col-tag">行业填报标签</th>
+                    <th class="mv2-col-mat">物料名称</th>
+                    <th class="mv2-col-param">参数名称</th>
+                    <th class="mv2-col-unit">单位</th>
+                    <th class="mv2-col-value">填报值</th>
+                    <th class="mv2-col-act">操作</th>
+                  </tr>
+                </thead>
+                <tbody id="mv2-tbody"></tbody>
+              </table>
+            </div>
+
+            <!-- 翻页（由 mv2RenderPager() 渲染） -->
+            <div class="mv2-pager" id="mv2-pager"></div>
+          </div>
+
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- 编辑弹窗 -->
+  <div class="modal-overlay" id="mv2-edit-modal">
+    <div class="modal mv2-modal">
+      <div class="modal-header">
+        <h3>编辑填报数据</h3>
+        <button type="button" class="modal-close" id="mv2-edit-close">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="mv2-form" id="mv2-edit-form"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn" id="mv2-edit-cancel">取消</button>
+        <button type="button" class="btn btn-primary" id="mv2-edit-ok">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 期初库存时间配置弹窗 -->
+  <div class="modal-overlay" id="mv2-time-modal">
+    <div class="modal mv2-modal">
+      <div class="modal-header">
+        <h3>期初库存时间配置</h3>
+        <button type="button" class="modal-close" id="mv2-time-close">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="mv2-form">
+          <div class="mv2-field">
+            <label for="mv2-time-input">期初库存时间</label>
+            <input type="month" id="mv2-time-input" />
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn" id="mv2-time-cancel">取消</button>
+        <button type="button" class="btn btn-primary" id="mv2-time-ok">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 删除确认弹窗 -->
+  <div class="modal-overlay" id="mv2-confirm-modal">
+    <div class="modal mv2-modal mv2-confirm-modal">
+      <div class="modal-header">
+        <h3>删除确认</h3>
+        <button type="button" class="modal-close" id="mv2-confirm-close">×</button>
+      </div>
+      <div class="modal-body">
+        <p class="mv2-confirm-text" id="mv2-confirm-text"></p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn" id="mv2-confirm-cancel">取消</button>
+        <button type="button" class="btn btn-delete" id="mv2-confirm-ok">删除</button>
+      </div>
+    </div>
+  </div>
+
+  <input type="file" id="mv2-file" accept=".xlsx,.xls,.csv" hidden />
+
+  <script src="js/app.js"></script>
+  <script src="js/report-config-store.js"></script>
+  <script src="vendor/xlsx.full.min.js"></script>
+  <script src="js/manual-entry-v2.js"></script>
+</body>
+</html>

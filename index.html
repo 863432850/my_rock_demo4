@@ -5,16 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>双碳管理平台</title>
   <!--
-    根路径入口：直接进入默认模块首页（js/app.js 里 MODULES[0].home = 碳排放管理 / 手工数据填报）。
-    换默认模块首页时只改 js/app.js 的 MODULES 即可（本文件跳默认模块首页，不必跟着改）。
+    根路径入口：直接进入默认模块首页（js/app.js 里 MODULES[0].home = 碳排放管理 / 手工数据填报v2）。
     保留本文件是为了让「访问站点根目录 /」和「直接打开 index.html」都能正确落地。
+
+    ⚠️ 这里的跳转目标是**写死**的，不读 MODULES —— 改 MODULES[0].home 时必须同步改本文件的下两行，
+    否则访问根路径会落到旧页面上（曾经就因为漏改，根入口指向了已封存的 manual-entry.html）。
+    纯静态站点没有构建步骤，做不到自动读取，只能靠这条注释提醒。
   -->
-  <script>location.replace('manual-entry.html' + location.search + location.hash);</script>
-  <noscript><meta http-equiv="refresh" content="0; url=manual-entry.html" /></noscript>
+  <script>location.replace('manual-entry-v2.html' + location.search + location.hash);</script>
+  <noscript><meta http-equiv="refresh" content="0; url=manual-entry-v2.html" /></noscript>
 </head>
 <body>
   <p style="font:14px/1.6 system-ui,-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;padding:24px;color:#5b6b7c">
-    正在进入「手工数据填报」…若未自动跳转，<a href="manual-entry.html">点此进入</a>。
+    正在进入「手工数据填报v2」…若未自动跳转，<a href="manual-entry-v2.html">点此进入</a>。
   </p>
 </body>
 </html>

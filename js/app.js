@@ -45,19 +45,23 @@ function docsSidebarGroup(moduleId) {
 /**
  * 一级模块注册表。
  * home 是模块首页（点顶栏入口、点面包屑首级都落这里）。
+ *
+ * 侧栏项可选 `disabled: true` —— 表示该页已「封存」：仍占菜单位置、仍能直接开 URL 查看，
+ * 但菜单项渲染成不可点的 <span>（灰字 + 禁止光标）。见 initLayout 里的渲染分支。
  */
 const MODULES = [
   {
     id: 'carbon',
     name: '碳排放管理',
-    home: 'manual-entry.html',
+    home: 'manual-entry-v2.html',
     getSidebar: function () {
       return [
         {
           id: 'biz',
           name: '业务界面',
           items: [
-            { id: 'manual-entry', name: '手工数据填报', href: 'manual-entry.html' },
+            { id: 'manual-entry', name: '手工数据填报（旧版）', href: 'manual-entry.html', disabled: true },
+            { id: 'manual-entry-v2', name: '手工数据填报v2', href: 'manual-entry-v2.html' },
           ],
         },
       ];
@@ -217,9 +221,13 @@ function yearOptions(selected, placeholder) {
   return html;
 }
 
-/** 月份下拉（1~12） */
-function monthOptions(selected) {
-  var html = '';
+/**
+ * 月份下拉（1~12）。
+ * placeholder 传了就在最前面加一个空值项（如「全部」）——「查全部」的语义由调用方决定：
+ * 空值即不按月份过滤。不传时行为与以前完全一致（v1 的调用不受影响）。
+ */
+function monthOptions(selected, placeholder) {
+  var html = placeholder ? '<option value="">' + placeholder + '</option>' : '';
   for (var m = 1; m <= 12; m++) {
     html += '<option value="' + m + '"' + (Number(selected) === m ? ' selected' : '') + '>' + m + '月</option>';
   }
@@ -318,6 +326,12 @@ function initLayout(activeId, opts) {
     menu.innerHTML = groups.map(function (group) {
       var items = (group.items || []).map(function (s) {
         var active = s.id === activeId ? ' active' : '';
+        // 封存项：渲染成不可点的 span（不是 <a>），点了不会跳转。
+        // 保留 active 高亮，因为直接开 URL 进来时它仍是「当前页」，不该看不出自己在哪。
+        if (s.disabled) {
+          return '<span class="sidebar-item is-disabled' + active + '"'
+            + ' title="该页面已封存，仅供查看">' + s.name + '</span>';
+        }
         return '<a class="sidebar-item' + active + '" href="' + s.href + '">' + s.name + '</a>';
       }).join('');
       return '<div class="sidebar-group">'
