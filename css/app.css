@@ -4665,7 +4665,7 @@ tr.row-no-target .node-toggle.empty { color: #c0c4cc; }
 }
 
 /* ============================================================
- * 手工数据填报v2（manual-entry-v2.html）
+ * 库存手工填报（manual-entry-v2.html）
  * ------------------------------------------------------------
  * 与 v1 的月卡看板是两条独立的线，所以样式也各自一套，只用 .mv2- 前缀，
  * 通用件（.filter-bar / .section-card / .btn / .table-wrap / .data-table / .modal-* / .rc-link）
@@ -4844,6 +4844,38 @@ tr.row-no-target .node-toggle.empty { color: #c0c4cc; }
 
 .mv2-field > select:focus,
 .mv2-field > input:focus { border-color: var(--primary); }
+
+/* --- 物料配置弹窗 ---
+   页签复用框架遗留的通用件 .status-tabs / .status-tab，
+   开关复用通用件 .switch / .switch-knob（两者在原框架包里就是给「页签 + 开关」用的，
+   本项目此前 0 引用，重新启用而不是另写一套，避免同一种控件出现两种长相）。 */
+.mv2-matcfg-modal { width: 520px; }
+
+/* 物料清单有 10 行，矮视口（笔记本 768p 等）下弹窗会被 .modal 的 max-height:86vh 卡住，
+   而 .modal-body 只有 overflow:auto、没有 min-height:0 —— flex 子项默认 min-height:auto，
+   会拒绝收缩到内容高度以下，于是内容直接溢出弹窗底部：靠后的物料（焦炭等）跑到弹窗外，
+   点不到（坐标点击会落到遮罩上，表现为「点开关没反应」）。
+   加 flex:1 + min-height:0 让 body 真正参与收缩，交给它自己的 overflow:auto 出内滚动条。
+   只限定本弹窗，不动全局 .modal-body，避免影响其他模块的弹窗。 */
+.mv2-matcfg-modal .modal-body {
+  flex: 1;
+  min-height: 0;
+}
+
+/* 「是否手工盘库」这一列：定宽 + 居中。
+   两类的选择器权重(.mv2-matcfg-table .mv2-matcfg-col-on = 0,2,0) 高过
+   .data-table thead th (0,1,2)，所以一条规则就能同时压住表头与单元格的对齐。 */
+.mv2-matcfg-table .mv2-matcfg-col-on {
+  width: 132px;
+  text-align: center;
+}
+
+/* 行高比通用表格略紧凑：一屏要放下 10 行物料 */
+.mv2-matcfg-table thead th { padding: 9px 14px; }
+.mv2-matcfg-table tbody td { padding: 8px 14px; }
+
+/* 开关是 inline-block 按钮，居中后按基线对齐会偏，显式中点对齐 */
+.mv2-matcfg-table .switch { vertical-align: middle; }
 
 @media (max-width: 1100px) {
   .mv2-head-actions { margin-left: 0; }

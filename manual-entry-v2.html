@@ -3,11 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>手工数据填报v2 · 碳排放管理</title>
+  <title>库存手工填报 · 碳排放管理</title>
   <link rel="stylesheet" href="css/app.css" />
 </head>
 <!--
-  手工数据填报v2（碳排放管理 > 业务界面 > 手工数据填报v2）
+  库存手工填报（碳排放管理 > 业务界面 > 库存手工填报）
+  文件与模块 id 仍是 v2（`manual-entry-v2`），只有**显示名**改成了「库存手工填报」——
+  改名不动 id/文件名，避免一切直链与 localStorage 键跟着断。
   与 v1（manual-entry.html 的 12 个月卡看板 + 填报页）是**两条独立的线**，互不影响：
     v1 = 月度存证视角（哪个月没填 → 进去按「主体 × 页签」填一张表）
     v2 = 数据台账视角（一行一个参数项，带查询 / 编辑 / 删除 / 模版下载 / 导入）
@@ -63,6 +65,14 @@
                     <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>
                   </svg>
                   期初库存时间配置
+                </button>
+                <button type="button" class="btn btn-primary" id="mv2-matcfg">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path d="M4 6h10"/><path d="M18 6h2"/><circle cx="16" cy="6" r="2"/>
+                    <path d="M4 12h4"/><path d="M12 12h8"/><circle cx="10" cy="12" r="2"/>
+                    <path d="M4 18h10"/><path d="M18 18h2"/><circle cx="16" cy="18" r="2"/>
+                  </svg>
+                  物料配置
                 </button>
                 <button type="button" class="btn btn-primary" id="mv2-export">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -124,7 +134,9 @@
     </div>
   </div>
 
-  <!-- 期初库存时间配置弹窗 -->
+  <!-- 期初库存时间配置弹窗。
+       年月控件与「模版下载」弹窗保持同一形态：两个下拉（年份 / 月份），不用原生
+       input[type=month] —— 同一个「选年月」的动作，两处长相必须一致。 -->
   <div class="modal-overlay" id="mv2-time-modal">
     <div class="modal mv2-modal">
       <div class="modal-header">
@@ -134,14 +146,64 @@
       <div class="modal-body">
         <div class="mv2-form">
           <div class="mv2-field">
-            <label for="mv2-time-input">期初库存时间</label>
-            <input type="month" id="mv2-time-input" />
+            <label for="mv2-time-year">年份</label>
+            <select id="mv2-time-year"></select>
+          </div>
+          <div class="mv2-field">
+            <label for="mv2-time-month">月份</label>
+            <select id="mv2-time-month"></select>
           </div>
         </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn" id="mv2-time-cancel">取消</button>
         <button type="button" class="btn btn-primary" id="mv2-time-ok">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 物料配置弹窗：两个页签（化石燃料 / 原料），每行一个「是否手工盘库」开关；
+       点「保存」才落库，取消 / 关窗丢弃改动。开关只影响「模版下载」带出哪些物料。 -->
+  <div class="modal-overlay" id="mv2-matcfg-modal">
+    <div class="modal mv2-modal mv2-matcfg-modal">
+      <div class="modal-header">
+        <h3>物料配置</h3>
+        <button type="button" class="modal-close" id="mv2-matcfg-close">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="status-tabs" id="mv2-matcfg-tabs"></div>
+        <div id="mv2-matcfg-list"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn" id="mv2-matcfg-cancel">取消</button>
+        <button type="button" class="btn btn-primary" id="mv2-matcfg-ok">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 模版下载弹窗：先选年份 / 月份，再按「物料配置」与该年月生成模版。
+       年份与月份会写进模版的前两列，所以用户只需要填「填报值」那一列。 -->
+  <div class="modal-overlay" id="mv2-export-modal">
+    <div class="modal mv2-modal">
+      <div class="modal-header">
+        <h3>模版下载</h3>
+        <button type="button" class="modal-close" id="mv2-export-close">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="mv2-form">
+          <div class="mv2-field">
+            <label for="mv2-export-year">年份</label>
+            <select id="mv2-export-year"></select>
+          </div>
+          <div class="mv2-field">
+            <label for="mv2-export-month">月份</label>
+            <select id="mv2-export-month"></select>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn" id="mv2-export-cancel">取消</button>
+        <button type="button" class="btn btn-primary" id="mv2-export-ok">生成模版</button>
       </div>
     </div>
   </div>

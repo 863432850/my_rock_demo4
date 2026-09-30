@@ -61,7 +61,7 @@ const MODULES = [
           name: '业务界面',
           items: [
             { id: 'manual-entry', name: '手工数据填报（旧版）', href: 'manual-entry.html', disabled: true },
-            { id: 'manual-entry-v2', name: '手工数据填报v2', href: 'manual-entry-v2.html' },
+            { id: 'manual-entry-v2', name: '库存手工填报', href: 'manual-entry-v2.html' },
           ],
         },
       ];

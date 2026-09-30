@@ -14,6 +14,6 @@ var DEFAULT_REQUIREMENTS = {
   "fileName": "手工数据填报.md",
   "fileType": "text/x-markdown",
   "filePath": "assets/carbon/requirements.md",
-  "savedAt": "2026-09-21 15:57:41",
+  "savedAt": "2026-09-30 11:31:45",
   "cleared": false
 };

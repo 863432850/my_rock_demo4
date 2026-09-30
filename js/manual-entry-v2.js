@@ -1,5 +1,6 @@
 /**
- * 手工数据填报v2 —— 碳排放管理 > 业务界面 > 手工数据填报v2
+ * 库存手工填报 —— 碳排放管理 > 业务界面 > 库存手工填报
+ * （文件与模块 id 仍叫 v2 / manual-entry-v2，只有显示名改了：「手工数据填报v2」→「库存手工填报」）
  *
  * 与 v1（manual-entry.html 的 12 个月卡看板）是**两条独立的线**：
  *   v1 = 月度存证视角：首页只回答「哪个月没填」→ 进去按「主体 × 页签」填一整张表
@@ -7,9 +8,15 @@
  * 两者各存各的 localStorage 键，互不干扰（改这里不会影响 v1 的月卡与详情页）。
  *
  * 页面结构：
- *   查询条件（年份 / 月份）
+ *   查询条件（年份 / 月份 / 物料名称）
  *   列表（年份 / 月份 / 报送生产线信息 / 行业填报标签 / 物料名称 / 参数名称 / 单位 / 填报值 + 操作）
- *   列表右上角：期初库存时间配置 / 模版下载 / 导入
+ *   列表右上角：期初库存时间配置 / 物料配置 / 模版下载 / 导入
+ *
+ * 两个配置入口的作用范围（都不要想当然地扩大）：
+ *   期初库存时间配置 → 决定**哪一月的「期初库存量」行可以手工编辑**（见 mv2CanEdit），
+ *                      也决定**模版里哪个月要带「期初库存量」行**（见 mv2ExportParamsFor）
+ *   物料配置（是否手工盘库）→ 只决定**模版下载带出哪些物料**（见 mv2BuildRows），
+ *                              不影响列表内容、也不影响查询
  *
  * 数据来源：
  *   js/report-config-store.js 的 rcLoadConfig() —— 匹配物料 / 参数 / 单位口径（与 v1 同源）
@@ -34,6 +41,51 @@ const MV2_TIME_KEY = 'emission-mgmt-manual-v2-opening-time-v1';
  * 其余月份的期初库存量都是按这个时间点派生出来的，不给改（见 mv2CanEdit）。
  */
 const MV2_TIME_DEFAULT = '2024-01';
+
+/** 两个库存参数名（种子数据 / 可编辑性判定 / 模版生成共用，免得散落魔术字符串） */
+const MV2_OPENING_PARAM = '期初库存量';
+const MV2_CLOSING_PARAM = '期末库存量';
+
+/** 物料配置存储键 */
+const MV2_MATCFG_KEY = 'emission-mgmt-manual-v2-material-config-v1';
+
+/**
+ * 物料配置弹窗的候选清单：两个页签（化石燃料 / 原料）→ 各自的物料。
+ * 数组顺序就是弹窗里的展示顺序（也是模版里同月各物料的排列顺序）。
+ *
+ * 「是否手工盘库」开关的作用范围**只有「模版下载」**：
+ * 它决定下载的模版里带出哪些物料，不影响列表里已有的数据，也不影响「查询」。
+ */
+const MV2_MATCFG_TABS = [
+  {
+    tag: '化石燃料',
+    materials: ['兰炭', '无烟煤', '烟煤', '能力平', '褐煤', '洗精煤', '其他洗煤', '煤矸石', '煤泥', '焦炭'],
+  },
+  {
+    tag: '原料',
+    materials: ['钼铁合金', '镍铁', '废钢', '直接还原铁', '生铁', '电极', '白云石', '石灰石'],
+  },
+];
+
+/** 物料配置的候选物料全量（去重，保持页签顺序） */
+function mv2MatCfgMaterials() {
+  const out = [];
+  MV2_MATCFG_TABS.forEach(function (t) {
+    t.materials.forEach(function (m) { if (out.indexOf(m) < 0) out.push(m); });
+  });
+  return out;
+}
+
+/**
+ * 导入校验用的「已知物料」= 填报项配置的物料清单 ∪ 物料配置的候选物料。
+ *
+ * 为什么不能只用 RC_MATERIALS：物料配置里新加的物料（石灰石、钼铁合金…）不在填报项配置清单里，
+ * 若只认 RC_MATERIALS，模版里这些行导入时会被判成「物料对不上配置」而整行跳过 ——
+ * 用户明明填的是本页导出的模版，却被告知格式不对。
+ */
+const MV2_KNOWN_MATERIALS = RC_MATERIALS.concat(
+  mv2MatCfgMaterials().filter(function (m) { return RC_MATERIALS.indexOf(m) < 0; })
+);
 
 /** 每页条数（翻页用）；可选档位见 MV2_PAGE_SIZES */
 const MV2_PAGE_SIZE_DEFAULT = 10;
@@ -81,7 +133,7 @@ function mv2DefaultRows() {
       rows.push({
         year: m.year, month: m.month,
         line: '全厂', tag: '化石燃料',
-        material: mat, param: '期末库存量', unit: 't', value: MV2_SEED_CLOSE[i][k],
+        material: mat, param: MV2_CLOSING_PARAM, unit: 't', value: MV2_SEED_CLOSE[i][k],
       });
     });
   });
@@ -93,6 +145,18 @@ function mv2DefaultRows() {
 let mv2Config = null;
 let mv2Rows = [];
 let mv2EditingKey = '';
+
+/**
+ * 物料配置（`{ 页签: [开关为开的物料] }`）。默认全关，初始化时从存储覆盖，见 initManualEntryV2Page。
+ * 它只影响「模版下载」带出哪些物料，不参与列表过滤。
+ */
+let mv2MatCfg = mv2DefaultMatCfg();
+
+/** 弹窗里正在编辑的草稿：点「保存」才落库，取消 / 关窗直接丢弃（改动不会半途生效） */
+let mv2MatCfgDraft = null;
+
+/** 弹窗当前选中的页签 */
+let mv2MatCfgTab = '';
 
 /** 一行的唯一键：六个定位字段拼起来，用来做去重与导入匹配 */
 function mv2KeyOf(r) {
@@ -134,7 +198,8 @@ function mv2Save(rows) {
  *   '2026-09'            → '2026-09'（本月度选择器给的格式）
  *   '2026-09-01T00:00'   → '2026-09'（早期用 datetime-local 时留下的旧格式，不能让它把输入框撑坏）
  *   '2026-9'             → '2026-09'
- * 认不出来的一律回落到默认值，别让脏数据流进 `input[type=month]`（它只认 YYYY-MM）。
+ * 认不出来的一律回落到默认值：`mv2TimeParts()` 的正则指望它把值压成 `YYYY-MM`，
+ * 兜不住的话脏数据会一路漏到「年份 / 月份」两个下拉的回填上。
  */
 function mv2NormMonth(v) {
   const m = /^(\d{4})-(\d{1,2})/.exec(String(v == null ? '' : v).trim());
@@ -165,6 +230,78 @@ function mv2SaveTime(v) {
 function mv2TimeText(v) {
   const m = /^(\d{4})-(\d{1,2})$/.exec(mv2NormMonth(v));
   return m ? m[1] + '年' + Number(m[2]) + '月' : String(v || '');
+}
+
+/**
+ * 期初库存时间 → `{ year, month }`，给「年份 / 月份」两个下拉回填用。
+ *
+ * 借 `mv2NormMonth()` 兜底：它认不出格式时**一定**返回 `MV2_TIME_DEFAULT`，
+ * 所以这里的正则必定命中，不用再写一条回落分支
+ * ——（历史值可能是早期 `datetime-local` 留下的 `2026-09-01T00:00`）。
+ */
+function mv2TimeParts(v) {
+  const m = /^(\d{4})-(\d{1,2})$/.exec(mv2NormMonth(v));
+  return { year: Number(m[1]), month: Number(m[2]) };
+}
+
+/* ---------- 物料配置读写 ---------- */
+
+/**
+ * 物料配置的形状：`{ '化石燃料': ['无烟煤', ...], '原料': [...] }`
+ * —— 每个页签对应一个数组，数组里就是该页签下「是否手工盘库」开关**为开**的物料。
+ *
+ * 默认**全部关闭**：由用户按需打开（不预设任何物料，避免默认值和用户预期不一致）。
+ */
+function mv2DefaultMatCfg() {
+  const cfg = {};
+  MV2_MATCFG_TABS.forEach(function (t) { cfg[t.tag] = []; });
+  return cfg;
+}
+
+/**
+ * 整理成规范形状。只保留**清单里真实存在**的物料 ——
+ * 存储里的脏数据（清单改过之后遗留的旧物料名、手改过的值）一律丢掉，
+ * 免得模版里凭空多出配置界面上根本看不到的物料。
+ */
+function mv2NormMatCfg(raw) {
+  const cfg = mv2DefaultMatCfg();
+  if (!raw || typeof raw !== 'object') return cfg;
+  MV2_MATCFG_TABS.forEach(function (t) {
+    const list = raw[t.tag];
+    if (!Array.isArray(list)) return;
+    cfg[t.tag] = t.materials.filter(function (m) { return list.indexOf(m) >= 0; });
+  });
+  return cfg;
+}
+
+function mv2LoadMatCfg() {
+  try {
+    const raw = localStorage.getItem(MV2_MATCFG_KEY);
+    if (raw) return mv2NormMatCfg(JSON.parse(raw));
+  } catch (e) { /* 存储损坏就当没配过，回落默认（全关） */ }
+  return mv2DefaultMatCfg();
+}
+
+function mv2SaveMatCfg(cfg) {
+  try {
+    localStorage.setItem(MV2_MATCFG_KEY, JSON.stringify(mv2NormMatCfg(cfg)));
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+/** 某物料在给定配置下「是否手工盘库」是不是开着的 */
+function mv2IsMatOn(tag, mat, cfg) {
+  return (((cfg || mv2MatCfg) || {})[tag] || []).indexOf(mat) >= 0;
+}
+
+/** 开关为开的物料总数（按钮 title / 保存提示用） */
+function mv2MatOnCount(cfg) {
+  const c = cfg || mv2MatCfg;
+  return MV2_MATCFG_TABS.reduce(function (n, t) {
+    return n + (((c || {})[t.tag] || []).length);
+  }, 0);
 }
 
 /* ---------- 查询条件 ---------- */
@@ -304,9 +441,6 @@ function mv2RenderPager(total) {
 
 /* ---------- 可编辑性判定 ---------- */
 
-/** 「期初库存量」这个参数名在多处要用到（判定 / 种子数据），提出来免得散落魔术字符串 */
-const MV2_OPENING_PARAM = '期初库存量';
-
 /** 行的 year / month → 'YYYY-MM'（补零，好和期初库存时间配置的值直接比） */
 function mv2MonthKeyOf(r) {
   const mm = Number(r.month);
@@ -437,14 +571,19 @@ function mv2ApplyDelete() {
 /* ---------- 期初库存时间配置 ---------- */
 
 function mv2OpenTimeModal() {
-  // input[type=month] 只认 YYYY-MM，所以先过一遍归一化
-  document.getElementById('mv2-time-input').value = mv2LoadTime();
+  // 年月两个下拉，与「模版下载」弹窗同一套（yearOptions / monthOptions）
+  const ym = mv2TimeParts(mv2LoadTime());
+  document.getElementById('mv2-time-year').innerHTML = yearOptions(ym.year);
+  document.getElementById('mv2-time-month').innerHTML = monthOptions(ym.month);
   openModal('mv2-time-modal');
 }
 
 function mv2ApplyTime() {
-  const v = document.getElementById('mv2-time-input').value;
-  if (!v) { toast('请选择期初库存时间'); return; }
+  const year = Number(document.getElementById('mv2-time-year').value);
+  const month = Number(document.getElementById('mv2-time-month').value);
+  if (!year || !month) { toast('请选择年份和月份'); return; }
+
+  const v = year + '-' + (month < 10 ? '0' : '') + month;
   if (!mv2SaveTime(v)) { toast('保存失败：浏览器存储不可用'); return; }
   mv2SyncTimeTitle();
   // 期初库存时间就是「期初库存量」的可编辑基准月（见 mv2CanEdit），
@@ -460,42 +599,266 @@ function mv2SyncTimeTitle() {
   if (btn) btn.title = '当前：' + mv2TimeText(mv2LoadTime());
 }
 
+/* ---------- 物料配置弹窗 ---------- */
+
+/** 深拷贝一份配置当草稿（浅拷贝会让「取消」也把改动带出去） */
+function mv2CloneMatCfg(cfg) {
+  const out = {};
+  MV2_MATCFG_TABS.forEach(function (t) {
+    out[t.tag] = ((cfg || {})[t.tag] || []).slice();
+  });
+  return out;
+}
+
+function mv2RenderMatCfgTabs() {
+  const box = document.getElementById('mv2-matcfg-tabs');
+  if (!box) return;
+  box.innerHTML = MV2_MATCFG_TABS.map(function (t) {
+    return '<button type="button" class="status-tab' + (t.tag === mv2MatCfgTab ? ' active' : '') + '"'
+      + ' data-tag="' + rcEsc(t.tag) + '">' + rcEsc(t.tag) + '</button>';
+  }).join('');
+}
+
+/** 当前页签下的物料表格：一列物料名，一列「是否手工盘库」开关 */
+function mv2RenderMatCfgList() {
+  const box = document.getElementById('mv2-matcfg-list');
+  if (!box) return;
+
+  const tab = MV2_MATCFG_TABS.filter(function (t) { return t.tag === mv2MatCfgTab; })[0];
+  if (!tab || !mv2MatCfgDraft) { box.innerHTML = ''; return; }
+
+  const on = mv2MatCfgDraft[tab.tag] || [];
+  box.innerHTML = '<table class="data-table mv2-matcfg-table">'
+    + '<thead><tr><th>物料名称</th>'
+    + '<th class="mv2-matcfg-col-on">是否手工盘库</th></tr></thead>'
+    + '<tbody>'
+    + tab.materials.map(function (m) {
+      const isOn = on.indexOf(m) >= 0;
+      return '<tr>'
+        + '<td>' + rcEsc(m) + '</td>'
+        + '<td class="mv2-matcfg-col-on">'
+        + '<button type="button" class="switch' + (isOn ? ' on' : '') + '"'
+        + ' role="switch" aria-checked="' + (isOn ? 'true' : 'false') + '"'
+        + ' data-mat="' + rcEsc(m) + '"'
+        + ' title="' + (isOn ? '已开启' : '已关闭') + '">'
+        + '<span class="switch-knob"></span></button>'
+        + '</td></tr>';
+    }).join('')
+    + '</tbody></table>';
+}
+
+function mv2RenderMatCfg() {
+  mv2RenderMatCfgTabs();
+  mv2RenderMatCfgList();
+}
+
+function mv2OpenMatCfgModal() {
+  mv2MatCfgDraft = mv2CloneMatCfg(mv2MatCfg);
+  mv2MatCfgTab = MV2_MATCFG_TABS[0].tag;    // 每次打开都回到第一个页签，位置可预期
+  mv2RenderMatCfg();
+  openModal('mv2-matcfg-modal');
+}
+
+/** 切页签。只改选中态并重画列表，**不丢草稿**（在另一个页签勾的开关要留住） */
+function mv2SwitchMatCfgTab(tag) {
+  if (!MV2_MATCFG_TABS.some(function (t) { return t.tag === tag; })) return;
+  mv2MatCfgTab = tag;
+  mv2RenderMatCfg();
+}
+
+/**
+ * 切换某个物料的开关（改的是**草稿**，不落库）。
+ * 就地改这一个按钮的类与 aria，不整表重画 —— 重画会让按钮失焦，键盘连续操作很难受。
+ */
+function mv2ToggleMatCfg(btn, mat) {
+  if (!mv2MatCfgDraft) return;
+  const tag = mv2MatCfgTab;
+  const list = mv2MatCfgDraft[tag] || (mv2MatCfgDraft[tag] = []);
+  const i = list.indexOf(mat);
+  const isOn = i < 0;                        // 原来没开 → 这次是「打开」
+  if (isOn) list.push(mat);
+  else list.splice(i, 1);
+
+  btn.classList.toggle('on', isOn);
+  btn.setAttribute('aria-checked', isOn ? 'true' : 'false');
+  btn.title = isOn ? '已开启' : '已关闭';
+}
+
+function mv2ApplyMatCfg() {
+  const next = mv2NormMatCfg(mv2MatCfgDraft);
+  if (!mv2SaveMatCfg(next)) { toast('保存失败：浏览器存储不可用'); return; }
+  mv2MatCfg = next;
+  mv2MatCfgDraft = null;
+
+  // 列表本身不受物料配置影响（它只作用于「模版下载」），所以这里不需要重画表格；
+  // 但按钮 title 上的「已开启 N 个」要跟着变。
+  mv2SyncMatCfgTitle();
+  closeModal('mv2-matcfg-modal');
+
+  const n = mv2MatOnCount();
+  toast(n ? ('物料配置已保存：已开启 ' + n + ' 个物料') : '物料配置已保存：当前没有开启任何物料');
+}
+
+function mv2CloseMatCfgModal() {
+  mv2MatCfgDraft = null;                     // 丢弃未保存的改动
+  closeModal('mv2-matcfg-modal');
+}
+
+/** 把已开启的物料数写进按钮 title，不开弹窗也能知道现在配了几个 */
+function mv2SyncMatCfgTitle() {
+  const btn = document.getElementById('mv2-matcfg');
+  if (btn) btn.title = '当前已开启 ' + mv2MatOnCount() + ' 个物料';
+}
+
 /* ============================================================
  * 模版下载 / 导入
  * ------------------------------------------------------------
- * 导出为 **Excel（.xlsx）**，列结构与列表一致（去掉「操作」列）：
+ * 点「模版下载」**先弹窗选年份 + 月份**，再按「物料配置」与该年月生成模版：
  *   第 1 行：填报说明（跨 8 列合并，红字）——只给人看，导入时自动跳过
  *   第 2 行：年份,月份,报送生产线信息,行业填报标签,物料名称,参数名称,单位,填报值
- *   第 3 行起：当前查询条件下的数据行（人工一般只改「填报值」）
+ *   第 3 行起：**开关为开的物料** 展开出来的行，年终月两列已按所选填好
+ *
+ * 弹窗里年月默认 = **当前月的上一个月**（见 mv2ExportDefaultYM，补报上一期）。
+ *
+ * 三条生成规则（都在 mv2BuildRows / mv2ExportParamsFor 里）：
+ *   1. 物料 = 物料配置里开关为「开」的物料 —— 不看列表里有没有数据
+ *   2. 行 = 只有所选年月**等于「期初库存时间配置」那个月**时，才带「期初库存量」行，
+ *          其余月份只带「期末库存量」行（期初只在基准月人工录入，别处是派生值）
+ *   3. 填报值**一律留空** —— 模版是发出去让人填的，带出数字会分不清哪格该填
+ *
  * 导入 = 按「年份 / 月份 / 生产线 / 标签 / 物料 / 参数」六个字段定位：
  *          列表里已有该行 → 更新填报值与单位；
- *          列表里没有、但六个字段都合规（物料 / 参数在配置清单里）→ 作为新行补进来，
- *            所以「下载模版 → 原样导入」也是把误删的行还原回来的办法；
+ *          列表里没有、但六个字段都合规（物料 / 参数在已知清单里）→ 作为新行补进来，
+ *            所以误删的行也能用模版补回来（行会回来，但填报值要重新填 —— 模版不带旧值）；
  *          字段不全或在清单外 → 跳过并计数，避免把不相干的行写进来。
  *        表头行位置是**探测**出来的（认第一列的「年份」），带不带说明行都能导。
  * ============================================================ */
 
 const MV2_XLSX_HEAD = ['年份', '月份', '报送生产线信息', '行业填报标签', '物料名称', '参数名称', '单位', '填报值'];
 
-const MV2_XLSX_NOTE = '填报说明：除填报值列，需人工填写外，其他列均不可修改！';
+const MV2_XLSX_NOTE = '填报说明：1.除填报值列，需人工填写外，其他列均不可修改；2.填报值，保量2位小数';
 const MV2_XLSX_NOTE_HPT = 22;
 
-/** 当前查询条件下的导出二维数组（第 0 行是表头） */
-function mv2BuildRows() {
+/**
+ * 模版里某物料要有哪些参数行。
+ *
+ * 规则：**只有选中的年月正好等于「期初库存时间配置」那个月，才带「期初库存量」行**；
+ * 其余月份只带「期末库存量」行。
+ *
+ * 依据：期初库存量只在基准月是人工录入的，其他月份的期初等于上月期末（派生值），
+ * 下发一张派生值让用户填没有意义，还会让人以为要重新盘一次库。
+ */
+function mv2ExportParamsFor(year, month) {
+  const isBase = mv2MonthKeyOf({ year: year, month: month }) === mv2LoadTime();
+  return isBase ? [MV2_OPENING_PARAM, MV2_CLOSING_PARAM] : [MV2_CLOSING_PARAM];
+}
+
+/** 某物料某参数的单位：优先取填报项配置里的口径（与 v1 一致），配置里没有就回落 't' */
+function mv2UnitOfParam(tag, material, param) {
+  const mats = rcMatsOf(mv2Config, tag);
+  for (let i = 0; i < mats.length; i++) {
+    if (mats[i].material !== material) continue;
+    const ps = mats[i].params || [];
+    for (let j = 0; j < ps.length; j++) {
+      if (ps[j].name === param) return ps[j].unit || 't';
+    }
+  }
+  return 't';
+}
+
+/** 模版里新生成的行用哪条生产线：取填报项配置的第一条，没配就「全厂」 */
+function mv2DefaultLine() {
+  const lines = (mv2Config && mv2Config.lines) || [];
+  return lines.length ? lines[0] : '全厂';
+}
+
+/**
+ * 模版内容的二维数组（第 0 行是表头）。
+ *
+ *   物料维度 = 物料配置里开关为「开」的物料（按页签、页签内顺序）
+ *   参数维度 = 见 mv2ExportParamsFor（只有基准月才带「期初库存量」行）
+ *   年 / 月  = 用户在下载弹窗里选的，直接写进前两列
+ *
+ * **填报值一律留空**：模版是发给用户填的，这一列又是唯一允许人工填的列，
+ * 出现数字会让人分不清哪格是「已有数据」、哪格是「等你填」。
+ * 所以这里**完全不读列表里已有的值**，也不按数据里的月份来生成。
+ */
+function mv2BuildRows(year, month) {
   const rows = [MV2_XLSX_HEAD.slice()];
-  mv2FilteredRows().forEach(function (r) {
-    rows.push([r.year, r.month, r.line, r.tag, r.material, r.param, r.unit, r.value]);
+  const line = mv2DefaultLine();
+  const matFilter = mv2QueryMaterial();
+
+  MV2_MATCFG_TABS.forEach(function (tab) {
+    tab.materials.forEach(function (mat) {
+      if (!mv2IsMatOn(tab.tag, mat)) return;                  // 开关为关的物料不进模版
+      if (matFilter !== null && mat !== matFilter) return;    // 查询条件里的物料筛选仍然生效
+      mv2ExportParamsFor(year, month).forEach(function (param) {
+        rows.push([
+          year, month, line, tab.tag, mat, param,
+          mv2UnitOfParam(tab.tag, mat, param),
+          '',                                                 // ← 填报值留空，等用户填
+        ]);
+      });
+    });
   });
   return rows;
 }
 
-function mv2ExportXlsx() {
-  if (!mv2FilteredRows().length) {
-    toast('当前条件下没有数据可下载');
-    return;
+/**
+ * 下载弹窗里年 / 月的默认值：**当前月的上一个月**（相对系统今天）。
+ *
+ * 依据：模版是拿来「补报上一期」的 —— 这个月开填，填的是刚过去的那个月，
+ * 所以点开弹窗什么都不用改，直接确定就是对的。
+ *
+ * 为什么不用列表数据 / 查询条件来推默认值（早期三条优先级的旧规则，已移除）：
+ *   - 「数据里的最新月」会被缺月带偏 —— 8 月忘了报、9 月报完了，最新月是 9 月，
+ *     但真正要填的还是 8 月；
+ *   - 「查询条件里的年月」是用户临时的筛选动作，不是默认值，混进来会让同一个
+ *     按钮在不同筛选状态下弹出不同年月，说不清也测不稳。
+ *
+ * 用纯算术而不是 `d.setMonth(d.getMonth() - 1)`：后者在月末会溢出
+ * （3 月 31 日减一个月得到 3 月 3 日 —— 2 月没有 31 号），跨年也不直观。
+ */
+function mv2ExportDefaultYM() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = d.getMonth() + 1;                       // getMonth() 是 0 基的
+  return m === 1 ? { year: y - 1, month: 12 } : { year: y, month: m - 1 };
+}
+
+function mv2OpenExportModal() {
+  const ym = mv2ExportDefaultYM();
+  document.getElementById('mv2-export-year').innerHTML = yearOptions(ym.year);
+  document.getElementById('mv2-export-month').innerHTML = monthOptions(ym.month);
+  openModal('mv2-export-modal');
+}
+
+function mv2ApplyExport() {
+  const year = Number(document.getElementById('mv2-export-year').value);
+  const month = Number(document.getElementById('mv2-export-month').value);
+  if (!year || !month) { toast('请选择年份和月份'); return; }
+  if (!mv2ExportXlsx(year, month)) return;   // 失败时 mv2ExportXlsx 已给出提示，别再补一条「已下载」
+  closeModal('mv2-export-modal');
+  toast('模版已下载（' + year + '年' + month + '月），填好填报值后可直接导入');
+}
+
+/**
+ * 导出模版。返回**是否真的写出了文件** —— 调用方据此决定提示语，
+ * 免得失败时先弹一条错误提示、又紧跟一条「模版已下载」自相矛盾。
+ */
+function mv2ExportXlsx(year, month) {
+  if (!mv2MatOnCount()) {
+    toast('请先点「物料配置」，把要填报的物料打开（是否手工盘库）');
+    return false;
   }
 
-  const rows = [[MV2_XLSX_NOTE]].concat(mv2BuildRows());
+  const body = mv2BuildRows(year, month);
+  if (body.length < 2) {
+    toast('当前条件下没有可导出的物料，请检查「物料配置」的开关与物料名称筛选');
+    return false;
+  }
+
+  const rows = [[MV2_XLSX_NOTE]].concat(body);
   const ws = XLSX.utils.aoa_to_sheet(rows);
 
   ws['!cols'] = [
@@ -514,7 +877,8 @@ function mv2ExportXlsx() {
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '手工数据填报');
-  XLSX.writeFile(wb, '手工数据填报模版_' + mv2QueryLabel() + '.xlsx');
+  XLSX.writeFile(wb, '手工数据填报模版_' + year + '年' + month + '月.xlsx');
+  return true;
 }
 
 /** 拆 CSV 文本为二维数组（处理引号包裹、引号转义、\r\n） */
@@ -604,11 +968,13 @@ function mv2ImportRows(rows) {
       value: mv2CellText(row[7]),
     };
 
-    // 六个定位字段都要合规，否则这行不知道往哪落
+    // 六个定位字段都要合规，否则这行不知道往哪落。
+    // 物料用 MV2_KNOWN_MATERIALS（填报项配置清单 ∪ 物料配置候选）——
+    // 物料配置里新开的物料不在填报项配置清单里，只认后者会把模版行全判成「对不上配置」。
     const known = row2.year && row2.month
       && RC_LINES.indexOf(row2.line) >= 0
       && RC_TAGS.indexOf(row2.tag) >= 0
-      && RC_MATERIALS.indexOf(row2.material) >= 0
+      && MV2_KNOWN_MATERIALS.indexOf(row2.material) >= 0
       && RC_PARAM_NAMES.indexOf(row2.param) >= 0;
     if (!known) { skipped++; continue; }
 
@@ -713,10 +1079,28 @@ function bindMv2Events() {
   document.getElementById('mv2-time-cancel').addEventListener('click', function () { closeModal('mv2-time-modal'); });
   document.getElementById('mv2-time-close').addEventListener('click', function () { closeModal('mv2-time-modal'); });
 
-  // 模版下载
-  document.getElementById('mv2-export').addEventListener('click', function () {
-    mv2ExportXlsx();
-    toast('模版已下载，填好填报值后可直接导入');
+  // 模版下载：先弹窗选年月（见 mv2OpenExportModal），确认后再生成
+  document.getElementById('mv2-export').addEventListener('click', mv2OpenExportModal);
+  document.getElementById('mv2-export-ok').addEventListener('click', mv2ApplyExport);
+  document.getElementById('mv2-export-cancel').addEventListener('click', function () { closeModal('mv2-export-modal'); });
+  document.getElementById('mv2-export-close').addEventListener('click', function () { closeModal('mv2-export-modal'); });
+
+  // 物料配置弹窗
+  document.getElementById('mv2-matcfg').addEventListener('click', mv2OpenMatCfgModal);
+  document.getElementById('mv2-matcfg-ok').addEventListener('click', mv2ApplyMatCfg);
+  document.getElementById('mv2-matcfg-cancel').addEventListener('click', mv2CloseMatCfgModal);
+  document.getElementById('mv2-matcfg-close').addEventListener('click', mv2CloseMatCfgModal);
+
+  // 页签切换
+  document.getElementById('mv2-matcfg-tabs').addEventListener('click', function (e) {
+    const btn = e.target.closest('.status-tab');
+    if (btn) mv2SwitchMatCfgTab(btn.dataset.tag);
+  });
+
+  // 开关（事件委托：「是否手工盘库」那一列都是 .switch）
+  document.getElementById('mv2-matcfg-list').addEventListener('click', function (e) {
+    const sw = e.target.closest('.switch[data-mat]');
+    if (sw) mv2ToggleMatCfg(sw, sw.dataset.mat);
   });
 
   // 导入
@@ -764,12 +1148,12 @@ function bindMv2Events() {
   });
 
   // 点遮罩关弹窗
-  ['mv2-edit-modal', 'mv2-time-modal', 'mv2-confirm-modal'].forEach(function (id) {
+  ['mv2-edit-modal', 'mv2-time-modal', 'mv2-confirm-modal', 'mv2-matcfg-modal', 'mv2-export-modal'].forEach(function (id) {
     document.getElementById(id).addEventListener('click', function (e) {
-      if (e.target.id === id) {
-        if (id === 'mv2-confirm-modal') mv2DeletingKey = '';
-        closeModal(id);
-      }
+      if (e.target.id !== id) return;
+      if (id === 'mv2-confirm-modal') mv2DeletingKey = '';
+      if (id === 'mv2-matcfg-modal') mv2MatCfgDraft = null;   // 丢弃未保存的改动
+      closeModal(id);
     });
   });
 }
@@ -799,6 +1183,7 @@ function initManualEntryV2Page() {
 
   mv2Config = rcLoadConfig();
   mv2Rows = mv2Load();
+  mv2MatCfg = mv2LoadMatCfg();
 
   // 三个查询条件都带一个空值项「全部」，且**默认选中它** ——
   // 即一进页面看的就是全部数据（不按年 / 月 / 物料过滤），而不是某个固定月份。
@@ -808,6 +1193,7 @@ function initManualEntryV2Page() {
 
   mv2Page = 1;
   mv2SyncTimeTitle();
+  mv2SyncMatCfgTitle();
   mv2RenderAll();
   bindMv2Events();
 }
